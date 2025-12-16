@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text to Deck</title>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+.flashcard { perspective: 1000px; }
+.flash-inner {
+  transition: transform .6s;
+  transform-style: preserve-3d;
+}
+.flashcard.flipped .flash-inner {
+  transform: rotateY(180deg);
+}
+.flash-face {
+  backface-visibility: hidden;
+}
+.flash-back {
+  transform: rotateY(180deg);
+}
+</style>
+</head>
+
+<body class="bg-gray-100 p-6 min-h-screen">
+<div class="max-w-6xl mx-auto">
+
+<h1 class="text-3xl font-bold text-center mb-6">Text → Deck</h1>
+
+<textarea id="inputText"
+class="w-full h-48 p-4 rounded-xl border mb-4"
+placeholder="Contoh:
+Database adalah kumpulan data terstruktur.
+
+- Data tersimpan rapi
+- Mudah diakses"></textarea>
+
+<div class="flex gap-3 mb-4">
+<button onclick="generateDeck()" class="bg-blue-600 text-white px-6 py-2 rounded-xl">Generate</button>
+<button onclick="clearAll()" class="bg-gray-300 px-6 py-2 rounded-xl">Clear</button>
+</div>
+
+<div id="keywords" class="mb-6"></div>
+
+<div id="deckContainer" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3"></div>
+
+</div>
+
+<script>
+let currentSlides = [];
+const stopwords = ["dan","yang","di","ke","dari","adalah","itu","ini","untuk","pada"];
+
+function generateDeck() {
+  const text = document.getElementById("inputText").value.trim();
+  const container = document.getElementById("deckContainer");
+  const keywordDiv = document.getElementById("keywords");
+
+  container.innerHTML = "";
+  keywordDiv.innerHTML = "";
+  currentSlides = [];
+
+  if (!text) {
+    alert("Masukkan teks terlebih dahulu");
+    return;
+  }
+
+  // =============================
+  // KATA KUNCI (HASHMAP)
+  // =============================
+  let freq = {};
+  text.toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .split(/\s+/)
+    .forEach(w => {
+      if (w && !stopwords.includes(w)) {
+        freq[w] = (freq[w] || 0) + 1;
+      }
+    });
+
+  const topKeywords = Object.entries(freq)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,5);
+
+  keywordDiv.innerHTML = `
+    <div class="bg-white p-4 rounded-xl shadow">
+      <strong>Kata kunci:</strong>
+      ${topKeywords.map(k=>`<span class="ml-2 px-2 py-1 bg-blue-100 rounded">${k[0]}</span>`).join("")}
+    </div>
+  `;
+
+  // =============================
+  // LOGIKA LAMA (DITAMBAH FLASHCARD)
+  // =============================
+  const paragraphs = text.split(/\n\s*\n+/);
+
+  paragraphs.forEach(para => {
+    para = para.trim();
+    if (!para) return;
+
+    // ATURAN "X adalah Y"
+    const def = para.match(/^(.+?)\s+adalah\s+(.+)/i);
+    if (def) {
+      currentSlides.push({
+        type: "flashcard",
+        front: def[1],
+        back: def[2]
+      });
+      return;
+    }
+
+    // LIST
+    const lines = para.split("\n");
+    const bullets = lines.filter(l => /^[-•*]\s+/.test(l));
+    if (bullets.length >= 2) {
+      currentSlides.push({
+        type: "list",
+        content: bullets.map(b => b.replace(/^[-•*]\s+/, ""))
+      });
+      return;
+    }
+
+    // TEXT
+    currentSlides.push({
+      type: "text",
+      content: para
+    });
+  });
+
+  // =============================
+  // RENDER (MINIMAL CHANGE)
+  // =============================
+  currentSlides.forEach(slide => {
+    const card = document.createElement("div");
+
+    if (slide.type === "flashcard") {
+      card.className = "flashcard cursor-pointer";
+      card.onclick = () => card.classList.toggle("flipped");
+      card.innerHTML = `
+        <div class="flash-inner relative h-44">
+          <div class="flash-face absolute inset-0 bg-white rounded-xl shadow flex items-center justify-center font-bold text-lg">
+            ${slide.front}
+          </div>
+          <div class="flash-face flash-back absolute inset-0 bg-blue-600 text-white rounded-xl shadow flex items-center justify-center p-4">
+            ${slide.back}
+          </div>
+        </div>`;
+    }
+
+    else if (slide.type === "list") {
+      card.innerHTML = `
+        <div class="bg-white p-6 rounded-xl shadow">
+          <ul class="list-disc ml-6 space-y-2">
+            ${slide.content.map(x=>`<li>${x}</li>`).join("")}
+          </ul>
+        </div>`;
+    }
+
+    else {
+      card.innerHTML = `
+        <div class="bg-white p-6 rounded-xl shadow">
+          <p>${slide.content}</p>
+        </div>`;
+    }
+
+    container.appendChild(card);
+  });
+}
+
+function clearAll() {
+  document.getElementById("inputText").value = "";
+  document.getElementById("deckContainer").innerHTML = "";
+  document.getElementById("keywords").innerHTML = "";
+  currentSlides = [];
+}
+</script>
+</body>
+</html>
